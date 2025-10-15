@@ -67,9 +67,9 @@ class Exp_Adaboost(Exp_Basic):
         args = self.args
         
         test_dict = {
-            'SOC': 0.2,  #已确定 90 13
-            'NL':  0.25,    #已确定  21  7  25 8
-            'CO2': 0.2,  #已确定
+            'SOC': 0.2,  # 90 13
+            'NL':  0.25,    #  21  7  25 8
+            'CO2': 0.2,  #
             'N2O': 0.2
         }
         
@@ -118,5 +118,6 @@ class Exp_Predict(Exp_Basic):
         # np.save(folder_path + str(args.seed) + '_real_prediction', preds)
 
         return pred_lnRR, pred_substence
+
 
 
