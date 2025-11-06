@@ -14,6 +14,7 @@ This is a programme that predict global lnRR of cropland based on the observatio
 - torch == 2.0.1
 - pandas == 2.0.1
 - numpy == 1.23.5
+- scipy == 1.11.2
 
       pip install scikit-learn==1.2.2
 
