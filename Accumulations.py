@@ -40,19 +40,13 @@ def calculate_are(mask, nlats, EARTH_RADIUS, dlat_rad, dlon_rad):
 bdfilename = "./bd.xlsx"
 bd = pd.read_excel(bdfilename, index_col=0).values
 
-# path_list2 = ['SOC_lnRR.xlsx', 'NL_lnRR.xlsx', 'CO2_lnRR.xlsx', 'N2O_lnRR.xlsx']
-path = r'.\Global_Prediction\Tables\final\Pred_lnRR.xlsx'  #'./prediction/lnRR.xlsx'
-# ./Global_Prediction/Tables/final/Pred_lnRR.xlsx'
+path = r'.\Figures&Tables\Fig.6.xlsx'  #'./prediction/lnRR.xlsx'
 
-# path_delta = r'.\Global_Prediction\Tables\final\C1.xlsx'
-path_delta = r'.\Global_Prediction\Tables\final\Pred_C1.xlsx'
+path_delta = r'.\Figures&Tables\Pred_C1.xlsx'
 sheet_name = ['SOC', 'NL', 'CO2', 'N2O']
-# base_path = r'G:\Project_Code\Adaboost_Regression\results\\'
-# set_value = [0.05, -0.05, -0.05, -0.05]
-set_value = [0.03, -0.006, -0.002, -0.02]
-# set_value = [0.0, -0.0, -0.0, -0.0]
+set_value = [0.05, -0.05, -0.05, -0.05]
+# set_value = [0.03, -0.006, -0.002, -0.02]
 material = ['Gt', 'Tg', 'Gt', 'Gt']
-# material = ['Mg/ha', 'Kg/ha', 'Mg/ha', 'Mg/ha']
 
 EARTH_RADIUS = 6371000
 
