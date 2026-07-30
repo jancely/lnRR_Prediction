@@ -46,17 +46,27 @@ class Exp_Adaboost(Exp_Basic):
 
     def _build_model(self, random_state, material):
         mate_dict = {
-            'SOC': {'n_estimators': 100, 'random_state': random_state, 'max_depth': 13},  
-            'NL': {'n_estimators': 21, 'random_state': random_state, 'max_depth': 7},    
-            'CO2': {'n_estimators': 50, 'random_state': random_state, 'max_depth': 13},
-            'N2O': {'n_estimators': 37, 'random_state': random_state, 'max_depth': 7},
+            'SOCT': {'n_estimators': 10, 'random_state': random_state, 'max_depth': 20, 'max_features': 8, min_samples_leaf': 1},  
+            'NNLT': {'n_estimators': 40, 'random_state': random_state, 'max_depth': 9, 'max_features': 10, min_samples_leaf': 3},    
+            'CO2T': {'n_estimators': 40, 'random_state': random_state, 'max_depth': 5, 'max_features': 8, min_samples_leaf': 1},
+            'N2OT': {'n_estimators': 30, 'random_state': random_state, 'max_depth': 20, 'max_features': 8, min_samples_leaf': 1},
         }
         args_info = mate_dict[material]
         estimators = args_info['n_estimators']
         random_state = args_info['random_state']
         depth = args_info['max_depth']
+        max_features = self.args_info['max_features']
+        min_samples_leaf = self.args_info['min_samples_leaf']
 
-        rf = RandomForestRegressor(n_estimators=estimators, random_state=random_state, max_depth=depth)
+        rf = RandomForestRegressor(
+            n_estimators=estimators, 
+            max_features=max_features,
+            min_samples_leaf=min_samples_leaf,
+            max_depth=depth,
+            bootstrap=True,
+            random_state=random_state,
+            max_samples=0.632,
+            n_jobs=14)
 
         self.regression = MultiOutputRegressor(rf)
 
@@ -66,32 +76,139 @@ class Exp_Adaboost(Exp_Basic):
     def train(self, setting):
         args = self.args
         
-        test_dict = {
-            'SOC': 0.2,  # 90 13
-            'NL':  0.25,    #  21  7  25 8
-            'CO2': 0.2,  #
-            'N2O': 0.2
-        }
-        
         #get data
         Data = _get_data(args=args, flag='train')[0]
         dx, dy = Data[0], Data[1]
-        # print(columns)
+
+        # Compute feature MESS
+        Data_global = _get_data(args=args, flag='pred')[0][0]
+        Lo = Data_global[:, 0]
+        La = Data_global[:, 1]
+        global_x = Data_global[:, 3:]
+        feature_names = ['BD', 'MAT', 'MAP', 'pH', 'SOC', 'Clay', 'Sand', 'Silt']
+        dx = dx.iloc[:, 3:]
+                     
+        inside_list = []
+        for i, name in enumerate(feature_names):
+            inside = ((global_x[:, i] > dx.min(axis=0)[i]) & (global_x[:, i] < dx.max(axis=0)[i]))
+            inside_list.append((inside == True).astype(np.uint8))
+        inside_array = np.column_stack(inside_list)
+        inside_num = inside_array.sum(axis=1)
+
+        inside5 = np.sum(inside_num >= 5) / len(inside_num) * 100
+        inside6 = np.sum(inside_num >= 6) / len(inside_num) * 100
+        inside7 = np.sum(inside_num >= 7) / len(inside_num) * 100
+        inside8 = np.sum(inside_num >= 8) / len(inside_num) * 100
+
+        # MAT-MAP Distribution
+        MAT = dx["MAT"].values
+        MAP = dx["MAP"].values
+        MAT_global = Data_global[:, 4]
+        MAP_global = Data_global[:, 5]
+        plt.scatter(
+             MAT_global,
+             MAP_global,
+             s=15,
+             color="lightgray",
+             alpha=0.3,
+             label="Global climate space")
+        plt.scatter(
+             MAT,
+             MAP,
+             s=15,
+             color="royalblue",
+             alpha=0.8,
+             label="Observations")    
         
-        #split data into train and test
+        # spatial K-fold cross-validation
+        R2_fold_list = []
+        NRMSE_fold_list = []
+
+        kf = KFold(
+            n_splits=10,
+            shuffle=True,
+            random_state=args.seed)
+
+        judge = 0
+        for fold, (train_idx, test_idx) in enumerate(kf.split(dx, groups=climate_group)):
+            train_fold_x = dx.iloc[train_idx]
+            test_fold_x = dx.iloc[test_idx]
+
+            train_fold_y = dy.iloc[train_idx]
+            test_fold_y = dy.iloc[test_idx]
+            grid = tune_rf(train_fold_x, train_fold_y)
+            params = grid.best_params_.copy()
+            rf = train_rf(train_fold_x, train_fold_y, params)
+            rf.fit(train_fold_x, train_fold_y)
+            pred_mean = rf.predict(test_fold_x)        
+
+            R2_fold = r2_score(test_fold_y, pred_mean)
+            R2_fold_list.append(R2_fold)
+
+            rmse_score = np.sqrt(mean_squared_error(test_fold_y, pred_mean))
+            nrmse_sd = rmse_score / np.std(test_fold_y)
+            nrmse = rmse_score / (test_y.max() - test_y.min())
+            NRMSE_fold_list.append(nrmse_sd)
+
+            if judge >= R2_fold:
+                pass
+            else:
+                best_model = rf
+                judge = R2_fold
+
+        print("========== Cross Validation ==========")
+        rmse_score = np.mean(NRMSE_fold_list)
+        rmse_std = np.std(NRMSE_fold_list)
+        R2_score = np.mean(R2_fold_list)
+        R2_std = np.std(R2_fold_list)
+        print('KFold Cross-Validation R2:', R2_score, '+/-', R2_std, \
+              'KFold Cross-Validation Nrmse:', rmse_score, '+/-', rmse_std)
+
+        # Bootstrap                     
         train_x, test_x, train_y, test_y = train_test_split(dx, dy, test_size=test_dict[self.material], random_state=args.seed)
 
-        #build model
-        # model = self._build_model(self.seed, self.material)
-        self.regression.fit(train_x, train_y)
+        grid = tune_rf(train_x, train_y)
+        MAT_bin = pd.qcut(train_x["MAT"], 3)
+        MAP_bin = pd.qcut(train_x["MAP"], 3)
+        env_group = (
+                MAT_bin.astype(str)
+                + "_"
+                + MAP_bin.astype(str))
 
-        Ecalculate train and test r2 score
-        R2train = self.regression.score(train_x, train_y)
-        R2test = self.regression.score(test_x, test_y)
+        bootstraps_x = [resample(train_x,
+                               stratify=env_group,
+                               replace=True,
+                               random_state=i) for i in range(5, 104)]
+        bootstraps_x.append(train_x.copy())
+        bootstraps_y = [train_y.loc[df.index].copy() for df in bootstraps_x]
 
-        print("|| Train R2: {0:.7f} Test R2: {1:.7f}".format(R2train, R2test))
+        # Uncertainty
+        models, preds = bootstrap_train(
+            bootstraps_x,
+            bootstraps_y,
+            self.args_info,  #grid.best_params_,
+            x_test=test_x,
+            save_dir="./models")
+        r2_scores = []
+        for pred in preds:
+            r2 = r2_score(
+                    test_y,
+                    pred,
+                    multioutput='raw_values')
+            r2_scores.append(r2)
+        r2_scores = np.array(r2_scores)
+        bootstraps_r2_mean = np.mean(r2_scores)
+        bootstraps_r2_std = np.std(r2_scores)
+        print("\n========== Bootstraps 100 ==========")
+        print('Bootstraps lnRR R2: {0:.7f} ± {1:.3f}'.format(bootstraps_r2_mean, bootstraps_r2_std))
+        # 95% CI
+        ci = np.percentile(r2_scores, [25, 75])
+        print('95% CI', ci)
 
-        return R2train, R2test, weight, self.regression
+        self.regression.xmin = dx.iloc[:, 3:].min()   
+        self.regression.xmax = dx.iloc[:, 3:].max()
+
+        return r2_scores, models, best_model
 
 
 class Exp_Predict(Exp_Basic):
@@ -108,16 +225,12 @@ class Exp_Predict(Exp_Basic):
         Ypredicted = model.predict(Predict_x)
 
         preds = np.array(Ypredicted)
-        # print(preds.shape)      #(259200, 2)
-        pred_lnRR = preds[:, 0].reshape(360, -1)
-        pred_substence = preds[:, 1].reshape(360, -1)
+        pred_lnRR_N2O = preds[:, 0]
+        pred_N2O = preds[:, 1]
+        Lo = Predict_x[:, 0]
+        La = Predict_x[:, 1]
 
-        pred_lnRR = pred_lnRR * landcover
-        pred_substence = pred_substence * landcover
-
-        # np.save(folder_path + str(args.seed) + '_real_prediction', preds)
-
-        return pred_lnRR, pred_substence
+        return pred_lnRR_N2O, pred_N2O, Lo, La, landcover
 
 
 
