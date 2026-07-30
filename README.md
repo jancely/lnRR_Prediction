@@ -71,4 +71,4 @@ Read raw data from csv file.
 
 ![Featurs' particial dependency correlation lines](https://github.com/jancely/lnRR_Prediction/blob/main/Features.png)
 
-![Global predicted cropland lnRR from our optimized model](https://github.com/jancely/Multioutput-prediction/blob/main/Predict_lnRR.png)
+![Global predicted cropland lnRR from our optimized model](https://github.com/jancely/lnRR_Prediction/blob/main/Predict_lnRR.png)
