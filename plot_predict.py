@@ -27,11 +27,8 @@ def calculate_are(mask, nlats, EARTH_RADIUS, dlat_rad, dlon_rad):
 
 crop_path = r'./Cropland.xlsx'
 cropland = pd.read_excel(crop_path).values
-# count = (cropland == -1000).sum().sum()
-# print("Number of -1000:", count)
 masked_crop = np.ma.masked_where(cropland == -1000, cropland)
 mask_land = masked_crop.mask
-# # non_crop_mask = (cropland == -1000)
 
 EARTH_RADIUS = 6371000
 
@@ -46,44 +43,35 @@ outlons = np.arange(-180 + dlonout / 2, 180, dlonout)
 nlons, nlats = np.meshgrid(outlons, outlats)
 dlat_rad = np.deg2rad(dlatout)
 dlon_rad = np.deg2rad(dlonout)
-# print('dlat_rad', dlat_rad)
 
 total_crop, total_crop_ha = calculate_are(mask_land, nlats, EARTH_RADIUS, dlat_rad, dlon_rad)
 
-fnt = 300
-# path = r'./Global_Prediction/Tables/final/Mean_lnRR_{}.xlsx'.format(fnt)
-# path1 = r'./Global_Prediction/Tables/final/CV_lnRR.xlsx'
-# path1 = r'./Global_Prediction/Tables/final/Pred_lnRR.xlsx'#.format(fnt)
-path1 = r'./Global_Prediction/Tables/final/Submit/new/Figures&Tables2/Fig.7.xlsx'.format(fnt)
+path1 = r'./Figures&Tables2/Fig.7.xlsx'
 
 print(' opening file: ' + str(path1))
 SOC = pd.read_excel(path1, sheet_name='SOC', index_col=0).values
 NL = pd.read_excel(path1,  sheet_name='NL', index_col=0).values
 CO2 = pd.read_excel(path1,  sheet_name='CO2', index_col=0).values
 N2O = pd.read_excel(path1,  sheet_name='N2O', index_col=0).values
-# CH4 = pd.read_excel(path1,  sheet_name='CH4', index_col=0).values
-
 
 font1 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 21}
 font2 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 20}
-materials = [SOC, NL, CO2, N2O]  #, CH4
+materials = [SOC, NL, CO2, N2O]  
 
-# name_list = ["Predicted lnRR (SOC stock)", "Predicted lnRR (Nitrate leaching)",
-#              "Predicted lnRR (CO${_2}$ emission)", "Predicted lnRR (N${_2}$O emission)"]  #, "Predicted lnRR (CH${_4}$ emission)"
-name_list = ["Coefficient of variation (SOC stock)", "Coefficient of variation (Nitrate leaching)",
-             "Coefficient of variation (CO${_2}$ emission)", "Coefficient of variation (N${_2}$O emission)"]
-# name_list = ["No nitrogen (0 kg N ha$^{-1}$)", "Low nitrogen (80 kg N ha$^{-1}$)",
-#              "Medium nitrogen (150 kg N ha$^{-1}$)", "High nitrogen (300 kg N ha$^{-1}$)"]
-# material_list = ["SOC stock: ", "Nitrate leaching:",
-#              "CO${_2}$ emission:", "N${_2}$O emission:"]
+name_list = ["Predicted lnRR (SOC stock)", "Predicted lnRR (Nitrate leaching)",
+             "Predicted lnRR (CO${_2}$ emission)", "Predicted lnRR (N${_2}$O emission)"]  #, "Predicted lnRR (CH${_4}$ emission)"
+# name_list = ["Coefficient of variation (SOC stock)", "Coefficient of variation (Nitrate leaching)",
+#              "Coefficient of variation (CO${_2}$ emission)", "Coefficient of variation (N${_2}$O emission)"]
+material_list = ["SOC stock: ", "Nitrate leaching:",
+             "CO${_2}$ emission:", "N${_2}$O emission:"]
 
 colors_dict = [
-            # (0.0, 0.2, 1.0),
-            # (0.2, 0.4, 1.0),
-            # (0.0, 0.8, 1.0),
-            # (0.4, 0.8, 1.0),
-            # (0.6, 0.8, 1.0),
-            (1.0, 0.97, 0.75),  # delect
+            (0.0, 0.2, 1.0),    # lnRR
+            (0.2, 0.4, 1.0),    # lnRR
+            (0.0, 0.8, 1.0),    # lnRR
+            (0.4, 0.8, 1.0),    # lnRR
+            (0.6, 0.8, 1.0),    # lnRR
+            # (1.0, 0.97, 0.75),  # CV
             (1.0, 0.8, 0.4),
             (1.0, 0.6, 0.3),
             (1.0, 0.4, 0.2),
@@ -91,8 +79,8 @@ colors_dict = [
             (1.0, 0.0, 0.0),
 ]
 
-# bounds = np.array([-0.8, -0.5, -0.2, -0.1, -0.05, 0, +0.05, +0.1, +0.2, +0.5, +0.8])
-bounds = np.array([0., 0.1, 0.2, 0.3, 0.4, 0.5])
+bounds = np.array([-0.8, -0.5, -0.2, -0.1, -0.05, 0, +0.05, +0.1, +0.2, +0.5, +0.8])
+# bounds = np.array([0., 0.1, 0.2, 0.3, 0.4, 0.5])    # CV
 cmap_custom = ListedColormap(colors_dict)
 norm = colors.BoundaryNorm(boundaries=bounds, ncolors=len(colors_dict))
 
@@ -134,15 +122,11 @@ for j in range(4):
     # print('%f percent cropland Increased.' % (percent))
     print(f"{name_list[j]} >5% 面积: {total_area_ha:.2f} 公顷 (占农田 {percent * 100:.1f}%)")
     print(f"{name_list[j]} <-5% 面积: {total_area_ha2:.2f} 公顷 (占农田 {percent2 * 100:.1f}%)")
-    # text_stats.append(f"{material_list[j]} Area: {total_area_ha:.2f} ha (Percentage in Cropland) {percent * 100:.1f}%")
-    #
-    # percentage.append(total_area_ha)
-    # square.append(percent * 100)
+    
 
-    #    # 背景色（整个画布）
+    # 背景色（整个画布）
     ax = plt.gca()
     ax.set_facecolor('white')
-    #m = basemap.Basemap(projection='robin', lon_0=-180, resolution='c')   #robin
     m = basemap.Basemap(
         projection='cyl',
         llcrnrlon=-180,
@@ -178,31 +162,6 @@ cbar = fig.colorbar(im1, cax=cb_ax, pad="4%", extend="both")
 cbar.set_ticks(bounds)  # 设置所有bounds为刻度
 cbar.set_ticklabels([f'{x:.2f}' for x in bounds])  # 显示全部刻度值
 cbar.ax.tick_params(labelsize=10)  # 调整刻度标签大小
-# cbar.set_label('Coefficient of Variation', fontsize=12, labelpad=10)
 
-# text_stats1 = (
-#     text_stats[0] + '\n' + text_stats[2])
-#
-# text_stats2 = (
-#     text_stats[1] + '\n' + text_stats[3])
-# print(text_stats)
-
-# plt.figtext(0.27, 0.05, text_stats1,
-#             bbox=dict(
-#             boxstyle='round',
-#             facecolor='#E0FFFF',
-#             alpha=0.8,
-#             edgecolor='#E0FFFF'),
-#             fontsize=10,
-#             ha='center')
-# plt.figtext(0.75, 0.05, text_stats2,
-#             bbox=dict(
-#             boxstyle='round',
-#             facecolor='#E0FFFF',
-#             alpha=0.8,
-#             edgecolor='#E0FFFF'),
-#             fontsize=10,
-#             ha='center')
-# plt.savefig('./figures/FNT_{}_Mean_lnRR.png'.format(fnt), dpi=300, bbox_inches='tight')
-plt.savefig('./Global_Prediction/Tables/final/Submit/new/Figures&Tables2/Pred_lnRR.pdf'.format(fnt), dpi=400, bbox_inches='tight')
+plt.savefig('./Pred_lnRR.pdf'.format(fnt), dpi=400, bbox_inches='tight')
 plt.show()
