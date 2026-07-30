@@ -21,8 +21,6 @@ def read_global(cru_file, gpcc_file, clay_file, bd_file, soc_file, ph_file, Crop
     # common mesh grid (0.5 x 0.5)
     nlons, nlats = np.meshgrid(lons_common, lats_common)
 
-    # gpcc_filename = '.\global_data\MAP\\normals_1991_2020_v2022_05.nc'
-    # print(' opening file: ' + str(gpcc_file))
     gpcc_file = Dataset(gpcc_file)
     start_date_index = 0
     gpcc_data = gpcc_file.variables['precip'][start_date_index:, ::-1, :].mean(axis=0) * 12  # (mm/yr)
@@ -31,11 +29,21 @@ def read_global(cru_file, gpcc_file, clay_file, bd_file, soc_file, ph_file, Crop
     gpcc_data_temp = gpcc_data.copy()
     gpcc_data[:, 0:360] = gpcc_data_temp[:, 360:]  # match to (lons_common, lats_common)
     gpcc_data[:, 360:] = gpcc_data_temp[:, 0:360]
+    gpcc_data.mask[191, 564] = True
     #
     del gpcc_data_temp
 
-    ### load the clay + silt and bulk density data from HWSD
-    # print(' opening file: ' + str(clay_file))
+    ### N fertilizer
+    # print('fertilizer_file', fertilizer_file)
+    fertilizer_data_temp = xr.open_dataset(fertilizer_file, decode_times=False)
+    fertilizer_temp = fertilizer_data_temp["nmanure_app_crop"][-1, :, :].T.values
+    fertilizermap = np.sum(~np.isnan(
+        fertilizer_temp.reshape(360, 12, 720, 3)),
+                     axis=(1, 3))       # match to (lons_common, lats_common)
+    fertilizer_data_temp.close()
+
+    del fertilizer_temp
+    
     clayfile_t = Dataset(clay_file, format='NETCDF4')
     claylats = clayfile_t.variables['lat'][:]
     claylons = clayfile_t.variables['lon'][:]
@@ -134,29 +142,26 @@ def read_global(cru_file, gpcc_file, clay_file, bd_file, soc_file, ph_file, Crop
     del landlats_fix, landlons_fix, soctlats, soctlons, landmap_in
 
     # initializing for grouping
-    # landcover = landmap * 1
     landcover_all = landmap * 1
     old = landmap * 1  # dummy variable
 
     # including tundra, desert, peatland (1 to 10 categories, as in Shi et al. 2020)
     landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8))  # forests boreal
                   & (nlats > 50)] = 0
-    landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8))  # forests temperate
-                  & (nlats < 50) & (nlats > 23)] = 0
-    landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8))  # forests temperate
-              & (nlats > -50) & (nlats < -23)] = 0
-    landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8))  # forests tropical
-                  & (nlats < 23) & (nlats > -23)] = 0
-    landcover_all[(old == 10) & (nlats < 60)] = 0  # grasslands
-    landcover_all[((old == 6) | (old == 7)) & (nlats < 60)] = 0  # shrublands
+    # landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8))] = 0  # forests boreal
+    landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8)) & (nlats < 50) & (nlats > 23)] = 0  # forests temperate ""
+    landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8)) & (nlats > -50) & (nlats < -23)] = 0  # forests temperate  ""
+    landcover_all[((old == 1) | (old == 2) | (old == 3) | (old == 4) | (old == 5) | (old == 8)) & (nlats < 23) & (nlats > -23)] = 0  # forests tropical
+    landcover_all[(old == 10) & (nlats < 60)] = 0  # grasslands  ""
+    landcover_all[(old == 10) & (nlats > 60)] = 0  # tundra shrubland
+    landcover_all[((old == 6) | (old == 7)) & (nlats < 60)] = 0  # shrublands  ""
     landcover_all[(old == 9)] = 0  # savannas
-    landcover_all[((old == 12) | (old == 13) | (old == 14))] = 1  # cropland
-    landcover_all[(old == 11)] = 0  # wetland/peatland
+    landcover_all[((old == 12) | (old == 14))] = 1  # cropland   #| (old == 14)
+    landcover_all[(old == 11) | (old == 13)] = 0  # wetland/peatland
     landcover_all[(old == 15)] = 0  # snow/ice
     landcover_all[(old == 16)] = 0  # desert
     landcover_all[((old == 0) | (old == 17))] = 0  # water and unclassified
-    landcover_all[((old == 6) | (old == 7)) & (nlats > 60)] = 0  # tundra shrubland
-    landcover_all[(old == 10) & (nlats > 60)] = 0  # tundra shrubland
+    landcover_all[((old == 6) | (old == 7)) & (nlats > 60)] = 0   # tundra shrubland   ""
     #
     del old, landmap
 
@@ -168,17 +173,20 @@ def read_global(cru_file, gpcc_file, clay_file, bd_file, soc_file, ph_file, Crop
     common_mask = np.ma.masked_array(common_mask, claymap)
     common_mask = np.ma.masked_array(common_mask, siltmap)
     common_mask = np.ma.masked_array(common_mask, sandmap)
+    common_mask = np.logical_or(common_mask, landcover_all == 0)
     #
     # adding peatland mask to all
     soc_data = np.ma.masked_array(socmap, mask=common_mask)
     cru_data = np.ma.masked_array(cru_data, mask=common_mask)
     gpcc_data = np.ma.masked_array(gpcc_data, mask=common_mask)
+    fertilizer_data = np.ma.masked_array(fertilizermap, mask=common_mask)
     ph_data = np.ma.masked_array(phmap, mask=common_mask)
     clay_data = np.ma.masked_array(claymap, mask=common_mask)
     silt_data = np.ma.masked_array(siltmap, mask=common_mask)
     sand_data = np.ma.masked_array(sandmap, mask=common_mask)
     bd_data = np.ma.masked_array(bdmap, mask=common_mask)
     landcover = np.ma.masked_array(landcover_all, mask=common_mask)  # no mask for landcover_all
+    
     ### flattened global datasets
     LU = landcover  # choosing  landuse to match synthesis categories
     #
@@ -186,41 +194,26 @@ def read_global(cru_file, gpcc_file, clay_file, bd_file, soc_file, ph_file, Crop
     ma.set_fill_value(cru_data, 0)
     ma.set_fill_value(gpcc_data, 0)
     ma.set_fill_value(clay_data, 0)
-    # ma.set_fill_value(texture_avg, 0)
-    ma.set_fill_value(LU, 0)
     ma.set_fill_value(ph_data, 0)
+    ma.set_fill_value(fertilizer_data, 0)
+    ma.set_fill_value(LU, 0)
     #
     length = np.ravel((soc_data)).shape[0]
     soc = np.ravel((soc_data)).reshape(length, 1)
     mat = np.ravel((cru_data)).reshape(length, 1)
     precip = np.ravel((gpcc_data)).reshape(length, 1)
+    fertilizer = np.ravel((fertilizer_data)).reshape(length, 1)
     bd = np.ravel((bd_data)).reshape(length, 1)
     clay = np.ravel((clay_data)).reshape(length, 1)
     silt = np.ravel((silt_data)).reshape(length, 1)
     sand = np.ravel((sand_data)).reshape(length, 1)
     ph = np.ravel((ph_data)).reshape(length, 1)
-    # Cropcombination = np.ravel((Cropcombination)).reshape(length, 1)
 
-    dlatout = 0.5  # size of lat grid
-    dlonout = 0.5  # size of lon grid
-    outlats = np.arange(90 - dlatout / 2, -90, -dlatout)
-    outlons = np.arange(-180 + dlonout / 2, 180, dlonout)
+    Lo = np.ravel((nlons)).reshape(length, 1)
+    La = np.ravel((nlats)).reshape(length, 1)
 
-    La = np.tile(outlats, 720)
-    La = np.ravel(La).reshape(length, 1)
-    Lo = np.repeat(outlons, 360)
-    Lo = np.ravel(Lo).reshape(length, 1)
+    #soctex_avg = np.ma.concatenate((Lo, La, fertilizer, bd, mat, precip, ph, soc, clay, silt, sand), axis=1)
 
-    # bd_global = bdmap * landcover
-    #
-    # BD_global = pd.DataFrame(bd_global)
-    # writer1 = pd.ExcelWriter('../bd.xlsx')
-    # BD_global.to_excel(writer1, float_format='%.4f')
-    # writer1.save()
-    #
-    # soctex_avg = np.asarray(np.concatenate((Lo, La, mat, precip,  bd, soc, ph, clay, silt, sand, Cropcombination), axis=1))
-    soctex_avg = np.asarray(np.concatenate((Lo, La, mat, precip,  bd, soc, ph, clay, silt, sand), axis=1))
-    #
     del length, soc, mat, precip, bd, clay, ph
 
     return soctex_avg, landcover_all
