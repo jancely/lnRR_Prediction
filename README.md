@@ -69,6 +69,6 @@ Read raw data from csv file.
 
 ## Model performance
 
-![Featurs' particial dependency correlation lines](https://github.com/jancely/Multioutput-prediction/blob/main/Features.png)
+![Featurs' particial dependency correlation lines](https://github.com/jancely/Multioutput-prediction/blob/main/Fearures.png)
 
 ![Global predicted cropland lnRR from our optimized model](https://github.com/jancely/Multioutput-prediction/blob/main/Predict_lnRR.png)
